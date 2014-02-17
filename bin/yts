@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+
+require "optparse"
+require "rainbow/ext/string"
+
+require_relative "../lib/youtube-searcher"
+
+options = Hash.new
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: yts [-m <NUM>] <query>"
+
+  opts.separator ""
+  opts.separator "Options:"
+
+  opts.on("-m", "--max-results [NUM]", "Maximum number of search results") do |num|
+    options[:max_results] = num.to_i.to_s if num.to_i > 0
+  end
+
+  opts.on_tail("-h", "--help", "Show this help message") do
+    puts opts
+    exit
+  end
+
+  opts.on_tail("-v", "--version", "Show version") do
+    puts "yts #{YoutubeSearcher::VERSION}"
+    exit
+  end
+end
+
+parser.parse! ARGV
+
+client = YoutubeSearcher::Client.instance
+videos = client.search(ARGV.join(" "), options)
+
+videos.each_with_index do |video, index|
+  puts "#{(index + 1).to_s.background(:yellow).foreground(:black)} #{video[:title]}"
+  puts "\t#{video[:url]}"
+end
