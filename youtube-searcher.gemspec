@@ -1,11 +1,11 @@
 # coding: utf-8
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'youtube/searcher/version'
+require 'youtube-searcher/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "youtube-searcher"
-  spec.version       = Youtube::Searcher::VERSION
+  spec.version       = YoutubeSearcher::VERSION
   spec.authors       = ["Aziz Light"]
   spec.email         = ["aziz@azizlight.me"]
   spec.summary       = %q{Search Youtube from the command line and download videos using `youtube-dl`.}
