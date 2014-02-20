@@ -10,7 +10,9 @@ Search Youtube from the command line and download videos using `youtube-dl`.
 
 ## Usage
 
-TODO: Write usage instructions here
+```
+> yts --help
+```
 
 ## Contributing
 
