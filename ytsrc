@@ -1,0 +1,6 @@
+---
+max_results: 20
+download_directory: "<%= Dir.getwd %>"
+audio_quality: 7
+audio_format: "mp3"
+always_download: true

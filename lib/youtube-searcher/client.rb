@@ -9,11 +9,11 @@ module YoutubeSearcher
     YOUTUBE_API_SERVICE_NAME = "youtube"
     YOUTUBE_API_VERSION = "v3"
 
-    def search(query, options = {})
+    def search(query, max_results: 20)
       parameters = Hash.new
       parameters[:part] = "id,snippet"
       parameters[:type] = "video"
-      parameters[:maxResults] = options[:max_results] || "20"
+      parameters[:maxResults] = max_results
       parameters[:q] = query
 
       response = client.execute!(

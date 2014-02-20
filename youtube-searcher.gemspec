@@ -20,4 +20,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake"
   spec.add_runtime_dependency "google-api-client"
   spec.add_runtime_dependency "rainbow"
+  spec.add_runtime_dependency "ruby-progressbar"
 end

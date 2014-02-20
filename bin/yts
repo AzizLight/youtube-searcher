@@ -1,24 +1,56 @@
 #!/usr/bin/env ruby
 
 require "optparse"
+require 'open3'
 require "rainbow/ext/string"
+require "ruby-progressbar"
 
 require_relative "../lib/youtube-searcher"
 
-options = Hash.new
+config = YoutubeSearcher::Config.instance.config
+audio_only = false
 
 parser = OptionParser.new do |opts|
-  opts.banner = "Usage: yts [-m <NUM>] <query>"
+  opts.banner = "Usage: yts [options] <query>"
 
   opts.separator ""
   opts.separator "Options:"
 
-  opts.on("-m", "--max-results [NUM]", "Maximum number of search results") do |num|
-    options[:max_results] = num.to_i.to_s if num.to_i > 0
+  opts.on("-m", "--max-results=[NUM]", "Maximum number of search results") do |num|
+    config[:max_results] = num.to_i.to_s if num.to_i > 0
+  end
+
+  opts.on("-d", "--dir=[DIR]", "Download directory") do |dir|
+    config[:download_directory] = dir
+  end
+
+  opts.on("-a", "--audio-only", "Download the audio only") do
+    audio_only = true
+  end
+
+  opts.on("--audio-quality=[QUALITY]", "Audio quality (0-9, 0 being the best)") do |quality|
+    config[:audio_quality] = quality
+  end
+
+  opts.on("--audio-format=[FORMAT]", "Audio format (best/aac/vorbis/mp3/m4a/opus/wav)") do |format|
+    config[:audio_format] = format
+  end
+
+  opts.on("--no-download", "Just search") do
+    config[:always_download] = false
   end
 
   opts.on_tail("-h", "--help", "Show this help message") do
     puts opts
+
+    puts
+    puts "Config file:"
+    puts "\tOptions can be made persistent using a config file (#{File.join(ENV["HOME"], ".ytsrc")})"
+    puts
+    puts "\tYou can generate a default config file by running:"
+    puts
+    puts "\t\t yts --config-gen"
+
     exit
   end
 
@@ -26,14 +58,118 @@ parser = OptionParser.new do |opts|
     puts "yts #{YoutubeSearcher::VERSION}"
     exit
   end
+
+  opts.on_tail("--config-gen", "Generate a config file in the home directory") do
+    config_file = File.join(ENV["HOME"], ".ytsrc")
+    if File.file?(config_file)
+      puts "You already have a config file!".color(:red)
+      status_code = 1
+    else
+      YoutubeSearcher::Config.instance.generate
+      puts "Generated a config file: #{config_file}".color(:green)
+      status_code = 0
+    end
+
+    exit status_code
+  end
 end
 
 parser.parse! ARGV
 
 client = YoutubeSearcher::Client.instance
-videos = client.search(ARGV.join(" "), options)
+videos = client.search(ARGV.join(" "), max_results: config[:max_results])
 
 videos.each_with_index do |video, index|
-  puts "#{(index + 1).to_s.background(:yellow).foreground(:black)} #{video[:title]}"
+  index = config[:always_download] ? "#{(index + 1).to_s.background(:yellow).foreground(:black)} " : ""
+  puts index + video[:title]
   puts "\t#{video[:url]}"
+end
+
+if config[:always_download]
+  def which(cmd)
+    exts = ENV['PATHEXT'] ? ENV['PATHEXT'].split(';') : ['']
+
+    ENV['PATH'].split(File::PATH_SEPARATOR).each do |path|
+      exts.each { |ext|
+        exe = File.join(path, "#{cmd}#{ext}")
+        return exe if File.executable? exe
+      }
+    end
+
+    return nil
+  end
+
+  unless which("youtube-dl")
+    puts "`youtube-dl` not found!".color(:red)
+    exit 1
+  end
+
+  unless which("ffmpeg") && audio_only
+    puts "`ffmpeg` not found!".color(:red)
+    exit 1
+  end
+
+  def prompt(message)
+    m = "\n==> ".color(:yellow)
+    m << "#{message}"
+    m << "\n==> ".color(:yellow)
+    m << ("=" * message.length)
+    m << "\n==> ".color(:yellow)
+    m
+  end
+
+  print prompt "Enter n° of videos to download (space separated. ex: 1 2 3)"
+  indices = $stdin.gets.chomp.split(" ").map { |i| i.to_i - 1 }
+
+  unless indices.empty?
+    output_dir = "#{config[:download_directory]}/%(title)s.%(ext)s"
+
+    urls = Array.new
+
+    indices.each do |index|
+      unless videos[index].nil?
+        urls << videos[index][:url]
+      end
+    end
+
+    if urls.empty?
+      puts "Invalid video numbers...".color(:red)
+      exit 1
+    end
+
+    puts "Downloading videos...\n".color(:green)
+    progressbar = ProgressBar.create(:starting_at => 20, :total => nil)
+
+    urls.map! { |url| "\"#{url}\"" }
+    cmd  = "youtube-dl -o '#{output_dir}' "
+    cmd << "-x " if audio_only
+    cmd << "--audio-quality #{config[:audio_quality]} "
+    cmd << "--audio-format '#{config[:audio_format]}' "
+    cmd << urls.join(" ")
+
+    status_code = 0
+    Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+      stop = false
+      Signal.trap('SIGCHLD') do
+        stop = true
+        progressbar.stop
+      end
+
+      counter = 0
+      until stop
+        progressbar.increment if counter % 2000000 == 0
+        counter += 1
+      end
+
+      status_code = wait_thr.value.exitstatus
+    end
+
+    if status_code == 0
+      puts "\nVideos downloaded!".color(:green)
+    else
+      puts "\nAn error occured...".color(:red)
+    end
+
+    exit status_code
+  end
 end
